@@ -540,7 +540,7 @@ table.dataTable tbody tr.row-ok td { background: #f3faf5 !important; }
 
 <script>
 // firebase init - RTDB only, no auth/apiKey needed for basic read/write
-firebase.initializeApp({ databaseURL: 'https://my-pos-app-9bdab-default-rtdb.firebaseio.com/' });
+firebase.initializeApp({ databaseURL: 'https://mypos-7db3a-default-rtdb.firebaseio.com/' });
 window.db = firebase.database();
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]; }); }
