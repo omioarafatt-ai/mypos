@@ -449,6 +449,27 @@ table.dataTable tbody tr.row-ok td { background: #f3faf5 !important; }
 .pos-camera-frame { width: 100%; max-width: 420px; margin: 0 auto; }
 #pos-qr-reader { width: 100%; }
 
+  /* QR Sales - full product list with typed quantity */
+  .pos-product-list-card { background:#fff; border:1px solid #e0e0e0; border-radius:4px; margin-bottom:20px; overflow:hidden; }
+  .pos-product-list-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; background:#f8f9fa; border-bottom:1px solid #e5e7eb; }
+  .pos-product-list-header h3 { margin:0; font-size:16px; color:var(--navy-primary); display:flex; align-items:center; gap:8px; }
+  .pos-product-list-scroll { max-height:420px; overflow:auto; }
+  .pos-product-table { width:100%; border-collapse:collapse; }
+  .pos-product-table th { position:sticky; top:0; z-index:2; background:var(--navy-primary); color:#fff; padding:10px 12px; text-align:left; font-size:13px; }
+  .pos-product-table td { padding:9px 12px; border-bottom:1px solid #f0f0f0; font-size:13px; vertical-align:middle; }
+  .pos-product-table tr:hover td { background:#f8fbff; }
+  .pos-product-qty-input { width:82px; padding:8px 9px; border:1px solid #cfd6dd; border-radius:3px; text-align:center; font-weight:600; font-size:16px !important; }
+  .pos-product-qty-input:focus { outline:none; border-color:var(--navy-accent); box-shadow:0 0 0 2px rgba(0,116,217,.12); }
+  .pos-product-stock { color:#666; white-space:nowrap; }
+  .pos-product-stock.low { color:var(--danger); font-weight:700; }
+  .pos-product-add { padding:7px 11px; font-size:12px; }
+  @media(max-width:768px){
+    .pos-product-list-scroll { max-height:360px; }
+    .pos-product-table th, .pos-product-table td { padding:8px 7px; }
+    .pos-product-table th:nth-child(2), .pos-product-table td:nth-child(2) { display:none; }
+    .pos-product-qty-input { width:68px; }
+  }
+
 /* Thermal receipt slip (POS checkout, 80mm) */
 .thermal-slip-print { width: 80mm; max-width: 80mm; margin: 20px auto; padding: 10px 8px; background: #fff; color: #000; font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.5; border: 1px dashed #ccc; }
 .ts-header { text-align: center; margin-bottom: 8px; }
@@ -823,6 +844,16 @@ async function fbCreateSale(sale, user) {
     await fbLogActivity('Sale', user, invoiceNo + ' — Total ' + totalStr + ' (' + sale.items.length + ' item' + (sale.items.length === 1 ? '' : 's') + ')');
     return { success: true, message: 'Sale completed', id: saleId, data: Object.assign({ id: saleId }, payload) };
   } catch (e) { return { success: false, message: e.message }; }
+}
+
+async function fbGetDuePayments() {
+  try {
+    const snap = await db.ref('due_payments').once('value');
+    const val = snap.val() || {};
+    const arr = Object.entries(val).map(function(e) { return Object.assign({ id: e[0] }, e[1]); });
+    arr.sort(function(a, b) { return new Date(b.paidAt) - new Date(a.paidAt); });
+    return { success: true, data: arr };
+  } catch (e) { return { success: false, message: e.message, data: [] }; }
 }
 
 async function fbGetSales() {
@@ -1480,6 +1511,7 @@ function Sidebar({ activeMenu, setActiveMenu, role, user, onLogout, collapsed })
           {isAdmin && <li><button className={activeMenu === 'month-expenses' ? 'active' : ''} onClick={() => setActiveMenu('month-expenses')}><i className="fas fa-money-bill-trend-up"></i><span>Month Expenses</span></button></li>}
           {isAdmin && <li><button className={activeMenu === 'month-net' ? 'active' : ''} onClick={() => setActiveMenu('month-net')}><i className="fas fa-scale-balanced"></i><span>Month Net</span></button></li>}
           <li><button className={activeMenu === 'records' ? 'active' : ''} onClick={() => setActiveMenu('records')}><i className="fas fa-address-book"></i><span>Customers</span></button></li>
+          <li><button className={activeMenu === 'customers-buy' ? 'active' : ''} onClick={() => setActiveMenu('customers-buy')}><i className="fas fa-user-clock"></i><span>Customers Buy</span></button></li>
           {isAdmin && <li><button className={activeMenu === 'suppliers' ? 'active' : ''} onClick={() => setActiveMenu('suppliers')}><i className="fas fa-truck-field"></i><span>Suppliers</span></button></li>}
           {isAdmin && <li><button className={activeMenu === 'purchase-orders' ? 'active' : ''} onClick={() => setActiveMenu('purchase-orders')}><i className="fas fa-file-invoice-dollar"></i><span>Purchase Orders</span></button></li>}
           {isAdmin && <li><button className={activeMenu === 'expenses' ? 'active' : ''} onClick={() => setActiveMenu('expenses')}><i className="fas fa-money-bill-trend-up"></i><span>Expenses</span></button></li>}
@@ -2604,7 +2636,7 @@ function A4Invoice({ sale, a4Ref }) {
 function printA4Invoice(ref) {
   if (!ref?.current) return;
   const w=window.open('','','width=900,height=1100');
-  const css='@page{size:A4;margin:15mm}*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#222;font-size:12px;line-height:1.4}.a4-header{display:flex;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #001f3f;margin-bottom:18px}.a4-biz-name{font-size:22px;font-weight:700;color:#001f3f;margin-bottom:6px}.a4-biz-line{font-size:11px;color:#555}.a4-doc-title{font-size:28px;font-weight:700;color:#001f3f;letter-spacing:4px}.a4-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px;padding:12px 14px;background:#f8f9fa;border-radius:4px}.a4-items{width:100%;border-collapse:collapse;margin-bottom:16px}.a4-items th{background:#001f3f;color:#fff;padding:9px;text-align:left}.a4-items td{padding:8px;border-bottom:1px solid #eee}.a4-items tbody tr:nth-child(even){background:#fafafa}.a4-totals-wrap{display:flex;justify-content:flex-end}.a4-totals{width:300px;border-collapse:collapse}.a4-totals td{padding:6px 10px}.a4-totals td:first-child{text-align:right;color:#555}.a4-totals td:last-child{text-align:right;font-weight:600}.a4-grand td{font-size:14px;font-weight:700;color:#001f3f;border-top:2px solid #001f3f;border-bottom:2px solid #001f3f}.a4-due td{color:#c62828;font-weight:700}.a4-notes{padding:10px;background:#fff8e1;border-left:3px solid #fbbc04;margin-top:15px}.a4-footer{text-align:center;border-top:1px dashed #ccc;margin-top:18px;padding-top:14px;color:#666}.a4-footer-meta{font-size:10px;color:#999;margin-top:4px}';
+  const css='@page{size:A4;margin:15mm}*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#222;font-size:12px;line-height:1.4}.a4-header{display:flex;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #001f3f;margin-bottom:18px}.a4-biz-name{font-size:22px;font-weight:700;color:#001f3f;margin-bottom:6px}.a4-biz-line{font-size:11px;color:#555}.a4-doc-title{font-size:28px;font-weight:700;color:#001f3f;letter-spacing:4px}.a4-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px;padding:12px 14px;background:#f8f9fa;border-radius:4px}.a4-items{width:100%;border-collapse:collapse;margin-bottom:16px}.a4-items th{background:#001f3f;color:#fff;padding:9px;text-align:left}.a4-items td{padding:8px;border-bottom:1px solid #eee}.a4-items tbody tr:nth-child(even){background:#fafafa}.a4-totals-wrap{display:flex;justify-content:flex-end}.a4-totals{width:300px;border-collapse:collapse}.a4-totals td{padding:6px 10px}.a4-totals td:first-child{text-align:right;color:#555}.a4-totals td:last-child{text-align:right;font-weight:600}.a4-grand td{font-size:14px;font-weight:700;color:#001f3f;border-top:2px solid #001f3f;border-bottom:2px solid #001f3f}.a4-due td{color:#c62828;font-weight:700}.a4-payment-history{margin-top:16px}.a4-payment-history strong{display:block;margin-bottom:6px;color:#001f3f}.a4-payment-history table{width:100%;border-collapse:collapse}.a4-payment-history th,.a4-payment-history td{padding:5px 7px;border:1px solid #ddd;text-align:left}.a4-payment-history th{background:#f2f4f7}.a4-notes{padding:10px;background:#fff8e1;border-left:3px solid #fbbc04;margin-top:15px}.a4-footer{text-align:center;border-top:1px dashed #ccc;margin-top:18px;padding-top:14px;color:#666}.a4-footer-meta{font-size:10px;color:#999;margin-top:4px}';
   w.document.write('<html><head><title>Invoice</title><style>'+css+'</style></head><body>'+ref.current.outerHTML+'</body></html>');w.document.close();setTimeout(()=>{w.print();w.close()},400);
 }
 function ThermalReceiptOverlay({ sale, onClose }) {
@@ -2626,6 +2658,7 @@ function POSView({ user, role }) {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [tendered, setTendered] = useState('');
   const [held, setHeld] = useState(() => { try { return JSON.parse(localStorage.getItem('pos_held') || '[]'); } catch (e) { return []; } });
+  const [productQty, setProductQty] = useState({});
   const scanRef = useRef(null);
 
   const { loading: loadingProducts, data: productsData } = useFetch(() => fbGetProducts(), []);
@@ -2672,6 +2705,23 @@ function POSView({ user, role }) {
     if (!res.success) { Swal.fire({ icon: 'error', title: 'Not Found', text: res.message || `No product matches "${code}"` }); return; }
     addToCart(res.data, 1);
   }, [addToCart, catalogReady, codeIndex]);
+
+  const addListedProduct = (product) => {
+    const qty = Math.floor(Number(productQty[product.id]) || 0);
+    if (qty <= 0) {
+      Swal.fire({ icon: 'warning', title: 'Enter Quantity', text: `Enter a quantity for ${product.name}.` });
+      return;
+    }
+    addToCart(product, qty);
+    setProductQty(prev => ({ ...prev, [product.id]: '' }));
+  };
+
+  const handleListedQtyKeyDown = (e, product) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addListedProduct(product);
+    }
+  };
 
   const handleScanSubmit = (e) => {
     e.preventDefault();
@@ -2770,6 +2820,65 @@ function POSView({ user, role }) {
 
       <div className="pos-grid">
         <div>
+          <div className="pos-product-list-card">
+            <div className="pos-product-list-header">
+              <h3><i className="fas fa-boxes-stacked"></i> All Products</h3>
+              <span style={{fontSize:'12px',color:'#777'}}>{products.length} product(s)</span>
+            </div>
+            {loadingProducts ? <TableSkeleton rows={6} columns={5} /> : (
+              <div className="pos-product-list-scroll">
+                {products.length === 0 ? (
+                  <div className="pos-empty"><i className="fas fa-box-open"></i><p>No products found.</p></div>
+                ) : (
+                  <table className="pos-product-table">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>SKU</th>
+                        <th>Price</th>
+                        <th>Stock</th>
+                        <th style={{width:'100px'}}>Qty</th>
+                        <th style={{width:'85px'}}>Add</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products.map(product => {
+                        const stock = computeQtyOnHand(product.id, movements);
+                        return (
+                          <tr key={product.id}>
+                            <td><strong>{product.name}</strong>{product.category ? <div className="cell-sub">{product.category}</div> : null}</td>
+                            <td><code>{product.sku || '-'}</code></td>
+                            <td>{money(Number(product.price) || 0)}</td>
+                            <td className={'pos-product-stock' + (stock <= Number(product.reorderLevel || 0) ? ' low' : '')}>{stock}</td>
+                            <td>
+                              <input
+                                className="pos-product-qty-input"
+                                type="number"
+                                min="0"
+                                step="1"
+                                inputMode="numeric"
+                                value={productQty[product.id] ?? ''}
+                                onChange={(e) => setProductQty(prev => ({...prev, [product.id]: e.target.value}))}
+                                onKeyDown={(e) => handleListedQtyKeyDown(e, product)}
+                                placeholder="0"
+                                disabled={!catalogReady}
+                              />
+                            </td>
+                            <td>
+                              <button type="button" className="btn btn-primary pos-product-add" onClick={() => addListedProduct(product)} disabled={!catalogReady || stock <= 0}>
+                                <i className="fas fa-plus"></i> Add
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </div>
+
           {loadingProducts ? <TableSkeleton rows={4} columns={4} /> : <Cart items={cart} onInc={(id) => changeQty(id, 1)} onDec={(id) => changeQty(id, -1)} onRemove={removeLine} />}
         </div>
         <div className="pos-summary">
@@ -2968,17 +3077,37 @@ function SalesHistoryView({ user, role }) {
 function DueAmountView({ user, role }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [expandedCustomers, setExpandedCustomers] = useState({});
-  const { loading, data, err } = useFetch(() => Promise.all([fbGetSales(), fbGetRecords()]), [reloadKey]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState('');
+  const { loading, data, err } = useFetch(() => Promise.all([fbGetSales(), fbGetRecords(), fbGetDuePayments()]), [reloadKey]);
+
   const sales = useMemo(() => (data && data[0] && data[0].success ? data[0].data : []), [data]);
   const customers = useMemo(() => (data && data[1] && data[1].success ? data[1].data : []), [data]);
+  const duePayments = useMemo(() => (data && data[2] && data[2].success ? data[2].data : []), [data]);
   const customerMap = useMemo(() => customers.reduce((m, c) => { m[c.id] = c; return m; }, {}), [customers]);
+
+  const inRange = useCallback((iso) => {
+    if (!iso) return true;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return true;
+    const key = d.toISOString().slice(0, 10);
+    if (dateFrom && key < dateFrom) return false;
+    if (dateTo && key > dateTo) return false;
+    return true;
+  }, [dateFrom, dateTo]);
 
   const dueSales = useMemo(() => sales.map(s => {
     const total = Number(s.total || 0);
     const paid = Number(s.amountTendered || 0);
     const due = Math.max(0, round2(total - paid));
     return Object.assign({}, s, { due, paid });
-  }).filter(s => s.due > 0 && s.customerId), [sales]);
+  }).filter(s => s.due > 0 && s.customerId && inRange(s.createdAt) &&
+    (!selectedCustomer || s.customerId === selectedCustomer)), [sales, inRange, selectedCustomer]);
+
+  const filteredPayments = useMemo(() => duePayments.filter(p =>
+    inRange(p.paidAt) && (!selectedCustomer || p.customerId === selectedCustomer)
+  ), [duePayments, inRange, selectedCustomer]);
 
   const customerDues = useMemo(() => {
     const map = {};
@@ -2995,27 +3124,44 @@ function DueAmountView({ user, role }) {
   }, [dueSales, customerMap]);
 
   const totalDue = useMemo(() => customerDues.reduce((a,c) => a + c.due, 0), [customerDues]);
+  const totalPaymentsInRange = useMemo(() => filteredPayments.reduce((a,p) => a + Number(p.amount || 0), 0), [filteredPayments]);
 
   const toggleCustomerInvoices = (customerId) => {
     setExpandedCustomers(prev => Object.assign({}, prev, { [customerId]: !prev[customerId] }));
   };
 
+  const paymentHistoryFor = (saleId) => duePayments.filter(p => p.saleId === saleId).sort((a,b) => new Date(a.paidAt) - new Date(b.paidAt));
+
   const payInvoiceDue = async (inv) => {
-    const { value: amount } = await Swal.fire({
+    const { value: form } = await Swal.fire({
       title: 'Pay Due — ' + (inv.invoiceNo || 'Invoice'),
-      html: '<div style="text-align:left;margin-bottom:10px">Customer: <strong>' + esc(inv.customerName || 'Walk-in') + '</strong><br>Total Due: <strong>' + money(inv.due) + '</strong></div>',
-      input: 'number',
-      inputValue: inv.due,
-      inputAttributes: { min:'0.01', max:String(inv.due), step:'0.01' },
-      inputLabel: 'Payment Amount',
+      html: `
+        <div style="text-align:left;margin-bottom:10px">
+          Customer: <strong>${esc(inv.customerName || 'Walk-in')}</strong><br>
+          Total Due: <strong>${money(inv.due)}</strong>
+        </div>
+        <div style="text-align:left">
+          <label style="display:block;margin:7px 0 4px;font-weight:600">Payment Amount</label>
+          <input id="due-pay-amount" class="swal2-input" type="number" min="0.01" max="${inv.due}" step="0.01" value="${inv.due}" style="margin:0;width:100%">
+          <label style="display:block;margin:10px 0 4px;font-weight:600">Payment Gateway / Method</label>
+          <select id="due-pay-method" class="swal2-select" style="display:flex;margin:0;width:100%">
+            ${PAYMENT_OPTS.map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}
+          </select>
+        </div>`,
       showCancelButton: true,
       confirmButtonText: 'Pay Due',
-      inputValidator: v => (!v || Number(v)<=0) ? 'Enter a valid amount.' : (Number(v)>inv.due ? 'Payment cannot exceed invoice due.' : undefined)
+      preConfirm: () => {
+        const amount = Number(document.getElementById('due-pay-amount')?.value || 0);
+        const method = document.getElementById('due-pay-method')?.value || 'Cash';
+        if (amount <= 0) { Swal.showValidationMessage('Enter a valid payment amount.'); return false; }
+        if (amount > inv.due) { Swal.showValidationMessage('Payment cannot exceed invoice due.'); return false; }
+        return { amount, method };
+      }
     });
-    if (!amount) return;
-    const res = await fbPayDue(inv.id, Number(amount), 'Cash', user);
+    if (!form) return;
+    const res = await fbPayDue(inv.id, form.amount, form.method, user);
     if (res.success) {
-      Swal.fire({icon:'success',title:'Payment successful',text:money(Number(amount))+' paid for '+(inv.invoiceNo || 'invoice')+'.',timer:1200,showConfirmButton:false});
+      Swal.fire({icon:'success',title:'Payment successful',text:money(form.amount)+' paid by '+form.method+'.',timer:1400,showConfirmButton:false});
       setReloadKey(k => k + 1);
     } else {
       Swal.fire({icon:'error',title:'Payment failed',text:res.message});
@@ -3024,42 +3170,144 @@ function DueAmountView({ user, role }) {
 
   const payCustomerDue = async (customer) => {
     const openSales = [...customer.sales].sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt));
-    const { value: amount } = await Swal.fire({
+    const { value: form } = await Swal.fire({
       title: 'Due Payment — ' + customer.name,
-      html: '<div style="text-align:left;margin-bottom:10px">Total Due: <strong>' + money(customer.due) + '</strong></div>',
-      input: 'number',
-      inputValue: customer.due,
-      inputAttributes: { min: '0.01', max: String(customer.due), step: '0.01' },
-      inputLabel: 'Payment Amount',
+      html: `
+        <div style="text-align:left;margin-bottom:10px">Total Due: <strong>${money(customer.due)}</strong></div>
+        <label style="display:block;margin:7px 0 4px;font-weight:600;text-align:left">Payment Amount</label>
+        <input id="customer-due-amount" class="swal2-input" type="number" min="0.01" max="${customer.due}" step="0.01" value="${customer.due}" style="margin:0;width:100%">
+        <label style="display:block;margin:10px 0 4px;font-weight:600;text-align:left">Payment Gateway / Method</label>
+        <select id="customer-due-method" class="swal2-select" style="display:flex;margin:0;width:100%">
+          ${PAYMENT_OPTS.map(o => `<option value="${esc(o.value)}">${esc(o.label)}</option>`).join('')}
+        </select>`,
       showCancelButton: true,
       confirmButtonText: 'Pay Due',
-      inputValidator: v => (!v || Number(v) <= 0) ? 'Enter a valid amount.' : (Number(v) > customer.due ? 'Payment cannot exceed total due.' : undefined)
+      preConfirm: () => {
+        const amount = Number(document.getElementById('customer-due-amount')?.value || 0);
+        const method = document.getElementById('customer-due-method')?.value || 'Cash';
+        if (amount <= 0) { Swal.showValidationMessage('Enter a valid payment amount.'); return false; }
+        if (amount > customer.due) { Swal.showValidationMessage('Payment cannot exceed total due.'); return false; }
+        return { amount, method };
+      }
     });
-    if (!amount) return;
+    if (!form) return;
 
-    let remaining = round2(Number(amount));
-    setLoadText('Processing due payment...');
+    let remaining = round2(form.amount);
     for (const sale of openSales) {
       if (remaining <= 0) break;
       const pay = Math.min(remaining, sale.due);
-      const res = await fbPayDue(sale.id, pay, 'Cash', user);
+      const res = await fbPayDue(sale.id, pay, form.method, user);
       if (!res.success) {
-        setLoadText('');
         Swal.fire({ icon:'error', title:'Payment failed', text:res.message });
         return;
       }
       remaining = round2(remaining - pay);
     }
-    setLoadText('');
-    Swal.fire({ icon:'success', title:'Payment successful', text: money(Number(amount)) + ' paid for ' + customer.name, timer:1400, showConfirmButton:false });
+    Swal.fire({icon:'success',title:'Payment successful',text:money(form.amount)+' paid by '+form.method+'.',timer:1400,showConfirmButton:false});
     setReloadKey(k => k + 1);
   };
 
-  // Small non-blocking loader message using the app's existing top loading bar.
-  const setLoadText = (text) => {
-    window.__dueLoadText = text || '';
-    const el = document.getElementById('dueLoadText');
-    if (el) el.textContent = window.__dueLoadText;
+  const clearFilters = () => { setDateFrom(''); setDateTo(''); setSelectedCustomer(''); };
+
+  const buildHistoryRows = () => {
+    const rows = [];
+    const selectedSales = sales.filter(s => s.customerId && (!selectedCustomer || s.customerId === selectedCustomer) && inRange(s.createdAt));
+    selectedSales.forEach(s => {
+      const pays = duePayments.filter(p => p.saleId === s.id && inRange(p.paidAt));
+      const initialPaid = Math.max(0, Number(s.amountTendered || 0) - pays.reduce((a,p) => a + Number(p.amount || 0), 0));
+      if (initialPaid > 0) {
+        rows.push({
+          customer: s.customerName || 'Walk-in',
+          invoice: s.invoiceNo || String(s.id).slice(-6).toUpperCase(),
+          saleDate: formatDateForDisplay(s.createdAt),
+          paymentDate: formatDateForDisplay(s.createdAt),
+          total: Number(s.total || 0),
+          tendered: initialPaid,
+          paid: initialPaid,
+          method: s.paymentMethod || 'Cash',
+          paymentType: 'Starting Invoice Payment',
+          remaining: Math.max(0, Number(s.total || 0) - initialPaid)
+        });
+      }
+      if (pays.length) {
+        let runningTendered = initialPaid;
+        pays.forEach(p => {
+          const paymentAmount = Number(p.amount || 0);
+          runningTendered = round2(runningTendered + paymentAmount);
+          rows.push({
+            customer: s.customerName || 'Walk-in',
+            invoice: s.invoiceNo || String(s.id).slice(-6).toUpperCase(),
+            saleDate: formatDateForDisplay(s.createdAt),
+            paymentDate: formatDateForDisplay(p.paidAt),
+            total: Number(s.total || 0),
+            tendered: runningTendered,
+            paid: paymentAmount,
+            method: p.method || 'Cash',
+            paymentType: 'Due Payment',
+            remaining: Math.max(0, Number(s.total || 0) - runningTendered)
+          });
+        });
+      }
+;
+    });
+    return rows;
+  };
+
+  const printHistory = () => {
+    const rows = buildHistoryRows();
+    const customerName = selectedCustomer ? (customerMap[selectedCustomer]?.name || 'Customer') : 'All Customers';
+    const filterText = `${dateFrom || 'All'} to ${dateTo || 'All'}`;
+    const body = rows.length ? rows.map(r => `<tr><td>${esc(r.paymentDate)}</td><td>${esc(r.customer)}</td><td>${esc(r.invoice)}</td><td>${esc(r.saleDate)}</td><td>${esc(r.paymentType || "Payment")}</td><td>${esc(r.method)}</td><td style="text-align:right">${money(r.tendered)}</td><td style="text-align:right">${money(r.paid)}</td><td style="text-align:right">${money(r.remaining)}</td></tr>`).join('') : `<tr><td colspan="8" style="text-align:center">No payment history found.</td></tr>`;
+    const w = window.open('', '', 'width=1100,height=800');
+    w.document.write(`<html><head><title>Due Payment History</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#222;font-size:12px}h1{color:#001f3f;margin-bottom:4px}.meta{color:#666;margin-bottom:16px}table{width:100%;border-collapse:collapse}th{background:#001f3f;color:#fff;padding:8px;text-align:left}td{padding:7px;border-bottom:1px solid #ddd}tfoot td{font-weight:700;border-top:2px solid #001f3f}</style></head><body><h1>Due Payment History</h1><div class="meta">Customer: ${esc(customerName)} &nbsp; | &nbsp; Date: ${esc(filterText)}</div><table><thead><tr><th>Payment Date</th><th>Customer</th><th>Invoice</th><th>Sale Date</th><th>Payment Type</th><th>Payment Method</th><th>Amount Tendered</th><th>Payment Amount</th><th>Remaining Due</th></tr></thead><tbody>${body}</tbody><tfoot>
+<tr><td colspan="7">Total Payments</td><td>${money(rows.reduce((a,r)=>a+r.paid,0))}</td><td></td></tr>
+<tr><td colspan="8">Remaining Due Total</td><td>${money(totalDue)}</td></tr>
+</tfoot></table></body></html>`);
+    w.document.close(); setTimeout(() => { w.print(); w.close(); }, 300);
+  };
+
+  const pdfHistory = () => {
+    const rows = buildHistoryRows();
+    const customerName = selectedCustomer ? (customerMap[selectedCustomer]?.name || 'Customer') : 'All Customers';
+    const doc = {
+      pageOrientation: 'landscape',
+      pageSize: 'A4',
+      content: [
+        { text: 'Due Payment History', style: 'title' },
+        { text: `Customer: ${customerName}    Date: ${dateFrom || 'All'} to ${dateTo || 'All'}`, style: 'meta' },
+        { table: {
+          headerRows: 1,
+          widths: ['auto','*','auto','auto','auto','auto','auto','auto','auto'],
+          body: [
+            ['Payment Date','Customer','Invoice','Sale Date','Payment Type','Payment Method','Amount Tendered','Payment Amount','Remaining Due'],
+            ...rows.map(r => [r.paymentDate,r.customer,r.invoice,r.saleDate,r.paymentType || 'Payment',r.method,money(r.tendered),money(r.paid),money(r.remaining)]),
+            [{text:'Total Payments',bold:true,colSpan:7}, {}, {}, {}, {}, {}, {}, {text:money(rows.reduce((a,r)=>a+r.paid,0)),bold:true}, ''],
+            [{text:'Remaining Due Total',bold:true,colSpan:8}, {}, {}, {}, {}, {}, {}, {}, {text:money(totalDue),bold:true}]
+          ]
+        }}
+      ],
+      styles: { title:{fontSize:18,bold:true,color:'#001f3f',margin:[0,0,0,6]}, meta:{fontSize:10,color:'#666',margin:[0,0,0,12]} },
+      defaultStyle: { fontSize: 8 }
+    };
+    if (window.pdfMake && typeof window.pdfMake.createPdf === 'function') {
+      try { window.pdfMake.createPdf(doc).download('due-payment-history.pdf'); } catch (e) {
+        const w = window.open('', '', 'width=1100,height=800');
+        if (!w) { Swal.fire({icon:'error',title:'PDF unavailable',text:'Please allow pop-ups for PDF export.'}); return; }
+        const body = rows.length ? rows.map(r => `<tr><td>${esc(r.paymentDate)}</td><td>${esc(r.customer)}</td><td>${esc(r.invoice)}</td><td>${esc(r.saleDate)}</td><td>${esc(r.paymentType || 'Payment')}</td><td>${esc(r.method)}</td><td style=\"text-align:right\">${money(r.tendered)}</td><td style=\"text-align:right\">${money(r.paid)}</td><td style=\"text-align:right\">${money(r.remaining)}</td></tr>`).join('') : `<tr><td colspan=\"9\" style=\"text-align:center\">No payment history found.</td></tr>`;
+        w.document.write(`<html><head><title>Due Payment History</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial;font-size:10px}table{width:100%;border-collapse:collapse}th{background:#001f3f;color:#fff;padding:6px}td{padding:6px;border-bottom:1px solid #ddd}</style></head><body><h2>Due Payment History</h2><p>Customer: ${esc(customerName)} | Date: ${esc(dateFrom || 'All')} to ${esc(dateTo || 'All')}</p><table><thead><tr><th>Payment Date</th><th>Customer</th><th>Invoice</th><th>Sale Date</th><th>Payment Type</th><th>Payment Method</th><th>Amount Tendered</th><th>Payment Amount</th><th>Remaining Due</th></tr></thead><tbody>${body}</tbody></table></body></html>`); w.document.close(); setTimeout(()=>{w.print();w.close()},300);
+      }
+    } else { Swal.fire({icon:'error',title:'PDF unavailable',text:'PDF library is not loaded. Print fallback is available from the Print History button.'}); }
+  };
+
+  const showInvoice = (inv) => {
+    const payments = paymentHistoryFor(inv.id);
+    const invoice = Object.assign({}, inv, { duePayments: payments });
+    const temp = document.createElement('div');
+    temp.style.position = 'fixed'; temp.style.left = '-10000px'; temp.style.top = '0'; temp.style.width = '210mm';
+    document.body.appendChild(temp);
+    const root = ReactDOM.createRoot(temp);
+    root.render(<A4Invoice sale={invoice} a4Ref={{ current: temp }} />);
+    setTimeout(() => { printA4Invoice({current: temp}); setTimeout(() => { root.unmount(); temp.remove(); }, 500); }, 100);
   };
 
   useEffect(() => {
@@ -3078,55 +3326,44 @@ function DueAmountView({ user, role }) {
       <div className="due-summary-grid">
         <div className="due-summary-card"><div className="dsc-label">Total Due</div><div className="dsc-value">{money(totalDue)}</div></div>
         <div className="due-summary-card"><div className="dsc-label">Customers With Due</div><div className="dsc-value">{customerDues.length}</div></div>
-        <div className="due-summary-card" style={{cursor:'pointer'}} onClick={() => document.getElementById('dueInvoicesSection')?.scrollIntoView({behavior:'smooth'})}>
-          <div className="dsc-label">Due Invoices</div><div className="dsc-value">{dueSales.length}</div>
+        <div className="due-summary-card"><div className="dsc-label">Payments In Filter</div><div className="dsc-value">{money(totalPaymentsInRange)}</div></div>
+      </div>
+
+      <div className="due-history-filters" style={{marginTop:'20px',padding:'16px',background:'#fff',border:'1px solid #e5e7eb',borderRadius:'6px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'12px',alignItems:'end'}}>
+          <div className="form-group"><label>Date From</label><input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} /></div>
+          <div className="form-group"><label>Date To</label><input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} /></div>
+          <SearchableDropdown label="Customer" icon="fas fa-user" options={customers.map(c=>({value:c.id,label:c.name+(c.phone?' · '+c.phone:'')}))} value={selectedCustomer} onChange={setSelectedCustomer} placeholder="All Customers" />
+          <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+            <button className="btn btn-secondary" type="button" onClick={clearFilters}><i className="fas fa-filter-circle-xmark"></i> Clear</button>
+            <button className="btn btn-primary" type="button" onClick={printHistory}><i className="fas fa-print"></i> Print History</button>
+            <button className="btn btn-success" type="button" onClick={pdfHistory}><i className="fas fa-file-pdf"></i> PDF History</button>
+          </div>
         </div>
       </div>
 
       <div id="dueInvoicesSection" style={{marginTop:'24px'}}>
         <LteCard title="All Due Invoices" icon="fa-file-invoice-dollar">
-          {dueSales.length === 0 ? <p style={{color:'#999'}}>No due invoices.</p> : (
+          {dueSales.length === 0 ? <p style={{color:'#999'}}>No due invoices for the selected filters.</p> : (
             <div className="about-table-wrapper">
               <table className="about-roles-table">
-                <thead>
-                  <tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Due</th><th>Action</th></tr>
-                </thead>
+                <thead><tr><th>Invoice</th><th>Sale Date</th><th>Customer</th><th>Total</th><th>Amount Tendered</th><th>Due</th><th>Last Due Payment</th><th>Action</th></tr></thead>
                 <tbody>
-                  {dueSales.map(inv => (
-                    <tr key={inv.id}>
+                  {dueSales.map(inv => {
+                    const pays = paymentHistoryFor(inv.id);
+                    const last = pays.length ? pays[pays.length-1] : null;
+                    return <tr key={inv.id}>
                       <td><code>{esc(inv.invoiceNo || String(inv.id).slice(-6).toUpperCase())}</code></td>
                       <td>{formatDateForDisplay(inv.createdAt)}</td>
                       <td>{esc(inv.customerName || 'Walk-in')}</td>
-                      <td>{money(inv.total)}</td>
-                      <td>{money(inv.paid)}</td>
+                      <td>{money(inv.total)}</td><td><strong style={{color:'#34a853'}}>{money(inv.paid)}</strong></td>
                       <td><strong style={{color:'#ea4335'}}>{money(inv.due)}</strong></td>
-                      <td>
-                        <button className="btn btn-success btn-sm" onClick={async () => {
-                          const { value: amount } = await Swal.fire({
-                            title: 'Pay Due — ' + (inv.invoiceNo || 'Invoice'),
-                            html: '<div style="text-align:left;margin-bottom:10px">Customer: <strong>' + esc(inv.customerName || 'Walk-in') + '</strong><br>Total Due: <strong>' + money(inv.due) + '</strong></div>',
-                            input: 'number',
-                            inputValue: inv.due,
-                            inputAttributes: { min:'0.01', max:String(inv.due), step:'0.01' },
-                            inputLabel: 'Payment Amount',
-                            showCancelButton: true,
-                            confirmButtonText: 'Pay Due',
-                            inputValidator: v => (!v || Number(v)<=0) ? 'Enter a valid amount.' : (Number(v)>inv.due ? 'Payment cannot exceed invoice due.' : undefined)
-                          });
-                          if (!amount) return;
-                          const res = await fbPayDue(inv.id, Number(amount), 'Cash', user);
-                          if (res.success) {
-                            Swal.fire({icon:'success',title:'Payment successful',text:money(Number(amount))+' paid.',timer:1200,showConfirmButton:false});
-                            setReloadKey(k => k + 1);
-                          } else {
-                            Swal.fire({icon:'error',title:'Payment failed',text:res.message});
-                          }
-                        }}>
-                          <i className="fas fa-money-bill-wave"></i> Pay Due
-                        </button>
+                      <td>{last ? `${formatDateForDisplay(last.paidAt)} · ${esc(last.method || 'Cash')} · ${money(last.amount)}` : '-'}</td>
+                      <td style={{whiteSpace:'nowrap'}}>
+                        <button className="btn btn-success btn-sm" onClick={() => payInvoiceDue(inv)}><i className="fas fa-money-bill-wave"></i> Pay Due</button>
                       </td>
-                    </tr>
-                  ))}
+                    </tr>;
+                  })}
                 </tbody>
               </table>
             </div>
@@ -3151,28 +3388,28 @@ function DueAmountView({ user, role }) {
                   </div>
                   <div className="due-customer-amount">{money(c.due)}</div>
                   <div className="due-actions">
-                    <button className="btn btn-primary btn-sm" onClick={() => toggleCustomerInvoices(customerKey)}>
-                      <i className={"fas " + (isOpen ? 'fa-chevron-up' : 'fa-file-invoice-dollar')}></i> {isOpen ? 'Hide Invoices' : 'View Invoices'}
-                    </button>
+                    <button className="btn btn-primary btn-sm" onClick={() => toggleCustomerInvoices(customerKey)}><i className={"fas " + (isOpen ? 'fa-chevron-up' : 'fa-file-invoice-dollar')}></i> {isOpen ? 'Hide Invoices' : 'View Invoices'}</button>
                     <button className="btn btn-success btn-sm" onClick={() => payCustomerDue(c)}><i className="fas fa-money-bill-wave"></i> Pay Total Due</button>
                   </div>
                 </div>
-
                 {isOpen && (
                   <div className="due-invoice-list">
                     <div className="due-invoice-list-title"><i className="fas fa-file-invoice-dollar"></i> Due Invoices for {esc(c.name)}</div>
-                    {invoices.map(inv => (
-                      <div className="due-invoice-item" key={inv.id}>
+                    {invoices.map(inv => {
+                      const pays = paymentHistoryFor(inv.id);
+                      return <div className="due-invoice-item" key={inv.id}>
                         <div className="due-invoice-info">
                           <div className="due-invoice-no">{esc(inv.invoiceNo || String(inv.id).slice(-6).toUpperCase())}</div>
-                          <div className="due-invoice-meta">{formatDateForDisplay(inv.createdAt)} · Total {money(inv.total)} · Paid {money(inv.paid)}</div>
+                          <div className="due-invoice-meta">{formatDateForDisplay(inv.createdAt)} · Total {money(inv.total)} · Amount Tendered {money(inv.paid)} · Due {money(inv.due)}</div>
+                          {pays.length > 0 && <div style={{fontSize:'12px',color:'#666',marginTop:'4px'}}>Payments: {pays.map(p => `${formatDateForDisplay(p.paidAt)} — ${p.method || 'Cash'} — ${money(p.amount)}`).join(' | ')}</div>}
                         </div>
                         <div className="due-invoice-right">
                           <strong>{money(inv.due)}</strong>
                           <button className="btn btn-success btn-sm" onClick={() => payInvoiceDue(inv)}><i className="fas fa-money-bill-wave"></i> Pay This Invoice</button>
+                          <button className="btn btn-primary btn-sm" style={{marginLeft:'5px'}} onClick={() => showInvoice(inv)}><i className="fas fa-print"></i> Invoice</button>
                         </div>
-                      </div>
-                    ))}
+                      </div>;
+                    })}
                   </div>
                 )}
               </div>
@@ -3180,7 +3417,6 @@ function DueAmountView({ user, role }) {
           })}
         </div>
       )}
-
       <div id="dueLoadText" style={{fontSize:'12px',color:'#888',marginTop:'10px'}}></div>
     </div>
   );
@@ -3483,6 +3719,212 @@ function ExpenseModal({ editItem, onClose, onSave }) {
 
 
 // --- Financial Date Range Reports ---
+
+// --- Customers Buy History ---
+function CustomersBuyView({ user, role }) {
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState('');
+  const { loading, data, err } = useFetch(() => Promise.all([fbGetSales(), fbGetRecords()]), []);
+
+  const sales = useMemo(() => (data && data[0] && data[0].success ? data[0].data : []), [data]);
+  const customers = useMemo(() => (data && data[1] && data[1].success ? data[1].data : []), [data]);
+
+  const inRange = useCallback((value) => {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return false;
+    if (dateFrom && d < new Date(dateFrom + 'T00:00:00')) return false;
+    if (dateTo && d > new Date(dateTo + 'T23:59:59.999')) return false;
+    return true;
+  }, [dateFrom, dateTo]);
+
+  const filteredSales = useMemo(() => sales.filter(s =>
+    s.customerId &&
+    inRange(s.createdAt) &&
+    (!selectedCustomer || s.customerId === selectedCustomer)
+  ), [sales, inRange, selectedCustomer]);
+
+  const selectedCustomerObj = useMemo(
+    () => customers.find(c => c.id === selectedCustomer),
+    [customers, selectedCustomer]
+  );
+
+  const totalBuy = useMemo(
+    () => round2(filteredSales.reduce((sum, s) => sum + Number(s.total || 0), 0)),
+    [filteredSales]
+  );
+
+  const resetFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+    setSelectedCustomer('');
+  };
+
+  const customerLabel = selectedCustomerObj?.name || 'All Customers';
+  const dateLabel = `${dateFrom || 'All'} to ${dateTo || 'All'}`;
+
+  const printCustomerBuy = () => {
+    const rows = filteredSales.map(s => `
+      <tr>
+        <td>${esc(formatDateForDisplay(s.createdAt))}</td>
+        <td>${esc(s.invoiceNo || String(s.id).slice(-6).toUpperCase())}</td>
+        <td>${esc(s.customerName || selectedCustomerObj?.name || 'Customer')}</td>
+        <td>${esc(s.paymentMethod || '-')}</td>
+        <td>${money(s.total)}</td>
+      </tr>
+    `).join('');
+
+    const w = window.open('', '', 'width=1100,height=800');
+    w.document.write(`<html><head><title>Customers Buy History</title><style>
+      @page{size:A4 landscape;margin:12mm}
+      body{font-family:Arial,sans-serif;color:#222;font-size:11px}
+      h1{color:#001f3f;margin:0 0 5px}
+      .meta{color:#666;margin-bottom:15px}
+      table{width:100%;border-collapse:collapse}
+      th{background:#001f3f;color:#fff;padding:8px;text-align:left}
+      td{padding:7px;border-bottom:1px solid #ddd}
+      .total{text-align:right;font-size:14px;font-weight:bold;margin-top:14px}
+    </style></head><body>
+      <h1>Customers Buy History</h1>
+      <div class="meta">Customer: ${esc(customerLabel)} &nbsp; | &nbsp; Date: ${esc(dateLabel)}</div>
+      <table>
+        <thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Purchase Total</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5" style="text-align:center">No purchase history found.</td></tr>'}</tbody>
+      </table>
+      <div class="total">Total Purchase: ${money(totalBuy)}</div>
+    </body></html>`);
+    w.document.close();
+    setTimeout(() => { w.print(); w.close(); }, 300);
+  };
+
+  const pdfCustomerBuy = () => {
+    if (!window.pdfMake) {
+      Swal.fire({icon:'error', title:'PDF unavailable', text:'PDF library is not loaded.'});
+      return;
+    }
+
+    const body = [
+      ['Date', 'Invoice', 'Customer', 'Payment', 'Purchase Total'],
+      ...filteredSales.map(s => [
+        formatDateForDisplay(s.createdAt),
+        s.invoiceNo || String(s.id).slice(-6).toUpperCase(),
+        s.customerName || selectedCustomerObj?.name || 'Customer',
+        s.paymentMethod || '-',
+        money(s.total)
+      ])
+    ];
+
+    if (body.length === 1) body.push(['No purchase history found.', '', '', '', '']);
+
+    window.pdfMake.createPdf({
+      pageOrientation: 'landscape',
+      pageSize: 'A4',
+      content: [
+        { text: 'Customers Buy History', style: 'title' },
+        { text: `Customer: ${customerLabel}   |   Date: ${dateLabel}`, style: 'meta' },
+        {
+          table: { headerRows: 1, widths: ['auto','auto','*','auto','auto'], body }
+        },
+        { text: `Total Purchase: ${money(totalBuy)}`, style: 'total' }
+      ],
+      styles: {
+        title: {fontSize:18,bold:true,color:'#001f3f',margin:[0,0,0,6]},
+        meta: {fontSize:10,color:'#666',margin:[0,0,0,12]},
+        total: {fontSize:13,bold:true,alignment:'right',margin:[0,12,0,0]}
+      },
+      defaultStyle: {fontSize:8}
+    }).download('customers-buy-history.pdf');
+  };
+
+  if (loading) return <div className="lte-kpi-grid">{[...Array(2)].map((_, i) => <DashboardCardSkeleton key={i} />)}</div>;
+
+  return (
+    <div className="data-section">
+      <div className="section-header">
+        <h2><i className="fas fa-user-clock"></i> Customers Buy</h2>
+      </div>
+
+      <div className="filters-section financial-report-filters">
+        <div className="filters-header">
+          <h3><i className="fas fa-filter"></i> Customer Purchase History</h3>
+          <button className="btn btn-secondary btn-sm" onClick={resetFilters}>
+            <i className="fas fa-rotate-left"></i> Reset
+          </button>
+        </div>
+
+        <div className="filters-grid">
+          <div className="filter-group">
+            <label><i className="fas fa-user"></i> Customer</label>
+            <SearchableDropdown
+              label=""
+              options={customers.map(c => ({value:c.id, label:c.name + (c.phone ? ' · ' + c.phone : '')}))}
+              value={selectedCustomer}
+              onChange={setSelectedCustomer}
+              placeholder="All Customers"
+            />
+          </div>
+          <div className="filter-group">
+            <label><i className="fas fa-calendar-day"></i> Date From</label>
+            <input className="filter-input" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          </div>
+          <div className="filter-group">
+            <label><i className="fas fa-calendar-day"></i> Date To</label>
+            <input className="filter-input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          </div>
+        </div>
+
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'12px'}}>
+          <button className="btn btn-primary" type="button" onClick={printCustomerBuy}>
+            <i className="fas fa-print"></i> Print History
+          </button>
+          <button className="btn btn-success" type="button" onClick={pdfCustomerBuy}>
+            <i className="fas fa-file-pdf"></i> PDF History
+          </button>
+        </div>
+      </div>
+
+      <div className="lte-card">
+        <div className="lte-card-header">
+          <h3 className="lte-card-title"><i className="fas fa-cart-shopping"></i> Buy History</h3>
+          <strong>Total Purchase: {money(totalBuy)}</strong>
+        </div>
+        <div className="lte-card-body">
+          <div className="about-table-wrapper">
+            <table className="about-roles-table">
+              <thead>
+                <tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Purchase Total</th></tr>
+              </thead>
+              <tbody>
+                {filteredSales.length ? filteredSales.map(s => (
+                  <tr key={s.id}>
+                    <td>{formatDateForDisplay(s.createdAt)}</td>
+                    <td>{s.invoiceNo || String(s.id).slice(-6).toUpperCase()}</td>
+                    <td>{s.customerName || selectedCustomerObj?.name || 'Customer'}</td>
+                    <td>{s.paymentMethod || '-'}</td>
+                    <td>{money(s.total)}</td>
+                  </tr>
+                )) : (
+                  <tr><td colSpan="5">No purchase history found for the selected filters.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="table-summary">
+            <div className="table-summary-item">
+              <div className="ts-label">Purchase Entries</div>
+              <div className="ts-value">{filteredSales.length}</div>
+            </div>
+            <div className="table-summary-item">
+              <div className="ts-label">Total Purchase</div>
+              <div className="ts-value">{money(totalBuy)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FinancialReportView({ user, role, type }) {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -3535,6 +3977,129 @@ function FinancialReportView({ user, role, type }) {
     setDateTo('');
   };
 
+  const reportRows = useMemo(() => {
+    if (type === 'revenue') return filteredSales.map(s => [
+      formatDateForDisplay(s.createdAt),
+      s.invoiceNo || String(s.id).slice(-6).toUpperCase(),
+      s.customerName || 'Walk-in',
+      s.paymentMethod || '-',
+      money(s.total)
+    ]);
+    if (type === 'expenses') return filteredExpenses.map(e => [
+      e.date || (e.createdAt || '').slice(0, 10),
+      e.category || '-',
+      e.payee || '-',
+      e.paymentMethod || '-',
+      money(e.amount)
+    ]);
+    return [];
+  }, [type, filteredSales, filteredExpenses]);
+
+  const reportTitle = type === 'revenue' ? 'Month Revenue Report' : type === 'expenses' ? 'Month Expenses Report' : 'Month Net Report';
+  const dateLabel = `${dateFrom || 'All'} to ${dateTo || 'All'}`;
+
+  const printFinancialReport = () => {
+    const rowsHtml = reportRows.length
+      ? reportRows.map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')
+      : `<tr><td colspan="${type === 'net' ? 2 : 5}" style="text-align:center">No data found for the selected date range.</td></tr>`;
+
+    let body = '';
+    if (type === 'net') {
+      body = `
+        <table>
+          <thead><tr><th>Summary</th><th>Amount</th></tr></thead>
+          <tbody>
+            <tr><td>Total Revenue</td><td>${money(revenue)}</td></tr>
+            <tr><td>Total Expenses</td><td>${money(expenseTotal)}</td></tr>
+            <tr><td><strong>Net</strong></td><td><strong>${money(net)}</strong></td></tr>
+          </tbody>
+        </table>
+        <h2>Revenue Details</h2>
+        <table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Total</th></tr></thead>
+        <tbody>${filteredSales.length ? filteredSales.map(s => `<tr><td>${esc(formatDateForDisplay(s.createdAt))}</td><td>${esc(s.invoiceNo || String(s.id).slice(-6).toUpperCase())}</td><td>${esc(s.customerName || 'Walk-in')}</td><td>${esc(s.paymentMethod || '-')}</td><td>${money(s.total)}</td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center">No sales found.</td></tr>'}</tbody></table>
+        <h2>Expense Details</h2>
+        <table><thead><tr><th>Date</th><th>Category</th><th>Payee</th><th>Paid Via</th><th>Amount</th></tr></thead>
+        <tbody>${filteredExpenses.length ? filteredExpenses.map(e => `<tr><td>${esc(e.date || (e.createdAt || '').slice(0, 10))}</td><td>${esc(e.category || '-')}</td><td>${esc(e.payee || '-')}</td><td>${esc(e.paymentMethod || '-')}</td><td>${money(e.amount)}</td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center">No expenses found.</td></tr>'}</tbody></table>`;
+    } else {
+      const headers = type === 'revenue'
+        ? '<th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Total</th>'
+        : '<th>Date</th><th>Category</th><th>Payee</th><th>Paid Via</th><th>Amount</th>';
+      body = `<table><thead><tr>${headers}</tr></thead><tbody>${rowsHtml}</tbody></table>
+        <div class="total">Total ${type === 'revenue' ? 'Revenue' : 'Expenses'}: <strong>${money(type === 'revenue' ? revenue : expenseTotal)}</strong></div>`;
+    }
+
+    const w = window.open('', '', 'width=1100,height=800');
+    w.document.write(`<html><head><title>${esc(reportTitle)}</title><style>
+      @page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#222;font-size:11px}
+      h1{color:#001f3f;margin:0 0 5px}h2{color:#001f3f;margin:20px 0 7px;font-size:14px}
+      .meta{color:#666;margin-bottom:15px}table{width:100%;border-collapse:collapse;margin-bottom:12px}
+      th{background:#001f3f;color:#fff;padding:7px;text-align:left}td{padding:6px;border-bottom:1px solid #ddd}
+      .total{font-size:14px;text-align:right;margin-top:8px}
+    </style></head><body><h1>${esc(reportTitle)}</h1><div class="meta">Date: ${esc(dateLabel)}</div>${body}</body></html>`);
+    w.document.close();
+    setTimeout(() => { w.print(); w.close(); }, 300);
+  };
+
+  const pdfFinancialReport = () => {
+    if (!window.pdfMake) {
+      Swal.fire({icon:'error', title:'PDF unavailable', text:'PDF library is not loaded.'});
+      return;
+    }
+
+    const content = [
+      { text: reportTitle, style: 'title' },
+      { text: `Date: ${dateLabel}`, style: 'meta' }
+    ];
+
+    if (type === 'net') {
+      content.push(
+        { text: 'Financial Summary', style: 'section' },
+        { table: { widths: ['*','auto'], body: [
+          ['Total Revenue', money(revenue)],
+          ['Total Expenses', money(expenseTotal)],
+          [{text:'Net',bold:true},{text:money(net),bold:true}]
+        ]}}
+      );
+      content.push(
+        { text: 'Revenue Details', style: 'section' },
+        { table: { headerRows: 1, widths: ['auto','auto','*','auto','auto'],
+          body: [
+            ['Date','Invoice','Customer','Payment','Total'],
+            ...filteredSales.map(s => [formatDateForDisplay(s.createdAt), s.invoiceNo || String(s.id).slice(-6).toUpperCase(), s.customerName || 'Walk-in', s.paymentMethod || '-', money(s.total)])
+          ]
+        }},
+        { text: 'Expense Details', style: 'section' },
+        { table: { headerRows: 1, widths: ['auto','*','*','auto','auto'],
+          body: [
+            ['Date','Category','Payee','Paid Via','Amount'],
+            ...filteredExpenses.map(e => [e.date || (e.createdAt || '').slice(0,10), e.category || '-', e.payee || '-', e.paymentMethod || '-', money(e.amount)])
+          ]
+        }}
+      );
+    } else if (type === 'revenue') {
+      content.push({ table: { headerRows: 1, widths: ['auto','auto','*','auto','auto'],
+        body: [['Date','Invoice','Customer','Payment','Total'], ...reportRows] }});
+      content.push({ text: `Total Revenue: ${money(revenue)}`, style: 'total' });
+    } else {
+      content.push({ table: { headerRows: 1, widths: ['auto','*','*','auto','auto'],
+        body: [['Date','Category','Payee','Paid Via','Amount'], ...reportRows] }});
+      content.push({ text: `Total Expenses: ${money(expenseTotal)}`, style: 'total' });
+    }
+
+    window.pdfMake.createPdf({
+      pageOrientation:'landscape',
+      pageSize:'A4',
+      content,
+      styles:{
+        title:{fontSize:18,bold:true,color:'#001f3f',margin:[0,0,0,6]},
+        meta:{fontSize:10,color:'#666',margin:[0,0,0,12]},
+        section:{fontSize:13,bold:true,color:'#001f3f',margin:[0,14,0,6]},
+        total:{fontSize:13,bold:true,alignment:'right',margin:[0,10,0,0]}
+      },
+      defaultStyle:{fontSize:8}
+    }).download(`${type}-report.pdf`);
+  };
+
   const invalidRange = dateFrom && dateTo && dateFrom > dateTo;
 
   if (loading) return <div className="lte-kpi-grid">{[...Array(3)].map((_, i) => <DashboardCardSkeleton key={i} />)}</div>;
@@ -3561,6 +4126,14 @@ function FinancialReportView({ user, role, type }) {
             <label><i className="fas fa-calendar-day"></i> Date To</label>
             <input className="filter-input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
           </div>
+        </div>
+        <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'12px'}}>
+          <button className="btn btn-primary" type="button" onClick={printFinancialReport}>
+            <i className="fas fa-print"></i> Print Report
+          </button>
+          <button className="btn btn-success" type="button" onClick={pdfFinancialReport}>
+            <i className="fas fa-file-pdf"></i> PDF Report
+          </button>
         </div>
         {invalidRange && <div className="error"><i className="fas fa-triangle-exclamation"></i> Date From cannot be later than Date To.</div>}
       </div>
@@ -4482,6 +5055,7 @@ function MainContent({ activeMenu, user, role, setActiveMenu }) {
     case 'month-expenses': return <MonthExpensesView user={user} role={role} />;
     case 'month-net': return <MonthNetView user={user} role={role} />;
     case 'records': return <RecordsView user={user} role={role} />;
+    case 'customers-buy': return <CustomersBuyView user={user} role={role} />;
     case 'suppliers': return <SuppliersView user={user} role={role} />;
     case 'purchase-orders': return <PurchaseOrdersView user={user} role={role} />;
     case 'expenses': return <ExpensesView user={user} role={role} />;
