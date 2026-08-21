@@ -2582,6 +2582,8 @@ function ThermalSlip({ sale }) {
         {sale.invoiceNo ? <div className="ts-meta-row"><span>Invoice:</span><span>{sale.invoiceNo}</span></div> : null}
         <div className="ts-meta-row"><span>Sale #:</span><span>{String(sale.id).slice(-6).toUpperCase()}</span></div>
         {sale.customerName && sale.customerName !== 'Walk-in' ? <div className="ts-meta-row"><span>Customer:</span><span>{sale.customerName}</span></div> : null}
+        {sale.customerPhone ? <div className="ts-meta-row"><span>Phone:</span><span>{sale.customerPhone}</span></div> : null}
+        {sale.customerAddress ? <div className="ts-meta-row"><span>Address:</span><span>{sale.customerAddress}</span></div> : null}
         <div className="ts-meta-row"><span>Cashier:</span><span>{sale.cashier}</span></div>
       </div>
       <div className="ts-divider"></div>
@@ -2627,16 +2629,16 @@ function A4Invoice({ sale, a4Ref }) {
   const due = Math.max(0, Number(sale.total || 0) - paid);
   return <div ref={a4Ref} className="a4-invoice">
     <div className="a4-header"><div className="a4-biz-info"><div className="a4-biz-name">{biz}</div>{addr && <div className="a4-biz-line">{addr}</div>}{phone && <div className="a4-biz-line">Phone: {phone}</div>}</div><div className="a4-doc-title">INVOICE</div></div>
-    <div className="a4-meta"><div><span className="a4-meta-lbl">Invoice #:</span> <strong>{sale.invoiceNo || String(sale.id).slice(-6).toUpperCase()}</strong></div><div><span className="a4-meta-lbl">Date:</span> {sale.createdAt ? new Date(sale.createdAt).toLocaleString() : ''}</div><div><span className="a4-meta-lbl">Bill To:</span> <strong>{sale.customerName || 'Walk-in'}</strong></div><div><span className="a4-meta-lbl">Cashier:</span> {sale.cashier || ''}</div>{sale.paymentMethod && <div><span className="a4-meta-lbl">Method:</span> {sale.paymentMethod}</div>}</div>
+    <div className="a4-meta"><div><span className="a4-meta-lbl">Invoice #:</span> <strong>{sale.invoiceNo || String(sale.id).slice(-6).toUpperCase()}</strong></div><div><span className="a4-meta-lbl">Date:</span> {sale.createdAt ? new Date(sale.createdAt).toLocaleString() : ''}</div><div><span className="a4-meta-lbl">Bill To:</span> <strong>{sale.customerName || 'Walk-in'}</strong></div>{sale.customerPhone && <div><span className="a4-meta-lbl">Phone:</span> {sale.customerPhone}</div>}{sale.customerAddress && <div><span className="a4-meta-lbl">Address:</span> {sale.customerAddress}</div>}{sale.paymentMethod && <div><span className="a4-meta-lbl">Method:</span> {sale.paymentMethod}</div>}</div>
     <table className="a4-items"><thead><tr><th>#</th><th>Item</th><th>SKU</th><th>Qty</th><th>Rate</th><th style={{textAlign:'right'}}>Line Total</th></tr></thead><tbody>{items.map((it,i)=><tr key={i}><td>{i+1}</td><td><strong>{it.name || ''}</strong></td><td>{it.sku || ''}</td><td>{it.qty || 0}</td><td>{money(it.price || 0)}</td><td style={{textAlign:'right'}}>{money(it.lineTotal != null ? it.lineTotal : Number(it.qty||0)*Number(it.price||0))}</td></tr>)}</tbody></table>
     <div className="a4-totals-wrap"><table className="a4-totals"><tbody><tr><td>Subtotal</td><td>{money(sale.subtotal || 0)}</td></tr>{Number(sale.discount||0)>0&&<tr><td>Discount</td><td>-{money(sale.discount)}</td></tr>}{Number(sale.tax||0)>0&&<tr><td>Tax</td><td>{money(sale.tax)}</td></tr>}<tr className="a4-grand"><td>Grand Total</td><td>{money(sale.total || 0)}</td></tr><tr><td>Paid</td><td>{money(paid)}</td></tr>{due>0&&<tr className="a4-due"><td>Balance Due</td><td>{money(due)}</td></tr>}</tbody></table></div>
-    {sale.notes && <div className="a4-notes"><strong>Notes:</strong> {sale.notes}</div>}<div className="a4-footer"><div>{CFG.receiptFooter || 'Thank you for your purchase!'}</div><div className="a4-footer-meta">{biz}{phone ? ' • '+phone : ''}{addr ? ' • '+addr : ''}</div></div>
+    {sale.notes && <div className="a4-notes"><strong>Notes:</strong> {sale.notes}</div>}<div className="a4-footer"><div>{CFG.receiptFooter || 'Thank you for your purchase!'}</div><div className="a4-footer-meta">{biz}{phone ? ' • '+phone : ''}{addr ? ' • '+addr : ''}</div><div className="a4-cashier-bottom">Cashier: {sale.cashier || ''}</div></div>
   </div>;
 }
 function printA4Invoice(ref) {
   if (!ref?.current) return;
   const w=window.open('','','width=900,height=1100');
-  const css='@page{size:A4;margin:15mm}*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#222;font-size:12px;line-height:1.4}.a4-header{display:flex;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #001f3f;margin-bottom:18px}.a4-biz-name{font-size:22px;font-weight:700;color:#001f3f;margin-bottom:6px}.a4-biz-line{font-size:11px;color:#555}.a4-doc-title{font-size:28px;font-weight:700;color:#001f3f;letter-spacing:4px}.a4-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px;padding:12px 14px;background:#f8f9fa;border-radius:4px}.a4-items{width:100%;border-collapse:collapse;margin-bottom:16px}.a4-items th{background:#001f3f;color:#fff;padding:9px;text-align:left}.a4-items td{padding:8px;border-bottom:1px solid #eee}.a4-items tbody tr:nth-child(even){background:#fafafa}.a4-totals-wrap{display:flex;justify-content:flex-end}.a4-totals{width:300px;border-collapse:collapse}.a4-totals td{padding:6px 10px}.a4-totals td:first-child{text-align:right;color:#555}.a4-totals td:last-child{text-align:right;font-weight:600}.a4-grand td{font-size:14px;font-weight:700;color:#001f3f;border-top:2px solid #001f3f;border-bottom:2px solid #001f3f}.a4-due td{color:#c62828;font-weight:700}.a4-payment-history{margin-top:16px}.a4-payment-history strong{display:block;margin-bottom:6px;color:#001f3f}.a4-payment-history table{width:100%;border-collapse:collapse}.a4-payment-history th,.a4-payment-history td{padding:5px 7px;border:1px solid #ddd;text-align:left}.a4-payment-history th{background:#f2f4f7}.a4-notes{padding:10px;background:#fff8e1;border-left:3px solid #fbbc04;margin-top:15px}.a4-footer{text-align:center;border-top:1px dashed #ccc;margin-top:18px;padding-top:14px;color:#666}.a4-footer-meta{font-size:10px;color:#999;margin-top:4px}';
+  const css='@page{size:A4;margin:15mm}*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#222;font-size:12px;line-height:1.4}.a4-header{display:flex;justify-content:space-between;padding-bottom:16px;border-bottom:3px solid #001f3f;margin-bottom:18px}.a4-biz-name{font-size:22px;font-weight:700;color:#001f3f;margin-bottom:6px}.a4-biz-line{font-size:11px;color:#555}.a4-doc-title{font-size:28px;font-weight:700;color:#001f3f;letter-spacing:4px}.a4-meta{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px;padding:12px 14px;background:#f8f9fa;border-radius:4px}.a4-items{width:100%;border-collapse:collapse;margin-bottom:16px}.a4-items th{background:#001f3f;color:#fff;padding:9px;text-align:left}.a4-items td{padding:8px;border-bottom:1px solid #eee}.a4-items tbody tr:nth-child(even){background:#fafafa}.a4-totals-wrap{display:flex;justify-content:flex-end}.a4-totals{width:300px;border-collapse:collapse}.a4-totals td{padding:6px 10px}.a4-totals td:first-child{text-align:right;color:#555}.a4-totals td:last-child{text-align:right;font-weight:600}.a4-grand td{font-size:14px;font-weight:700;color:#001f3f;border-top:2px solid #001f3f;border-bottom:2px solid #001f3f}.a4-due td{color:#c62828;font-weight:700}.a4-payment-history{margin-top:16px}.a4-payment-history strong{display:block;margin-bottom:6px;color:#001f3f}.a4-payment-history table{width:100%;border-collapse:collapse}.a4-payment-history th,.a4-payment-history td{padding:5px 7px;border:1px solid #ddd;text-align:left}.a4-payment-history th{background:#f2f4f7}.a4-notes{padding:10px;background:#fff8e1;border-left:3px solid #fbbc04;margin-top:15px}.a4-footer{text-align:center;border-top:1px dashed #ccc;margin-top:18px;padding-top:14px;color:#666}.a4-footer-meta{font-size:10px;color:#999;margin-top:4px}.a4-cashier-bottom{font-size:11px;color:#444;margin-top:10px;font-weight:600}';
   w.document.write('<html><head><title>Invoice</title><style>'+css+'</style></head><body>'+ref.current.outerHTML+'</body></html>');w.document.close();setTimeout(()=>{w.print();w.close()},400);
 }
 function ThermalReceiptOverlay({ sale, onClose }) {
@@ -2784,7 +2786,10 @@ function POSView({ user, role }) {
     const sale = {
       items: totals.lines, subtotal: totals.subtotal, discount: totals.discount, discountType, tax: totals.tax, total: totals.grand,
       paymentMethod, amountTendered: paymentMethod === 'Cash' ? (Number(tendered) || 0) : (paymentMethod === 'Credit' ? 0 : totals.grand), changeDue: round2(changeDue),
-      customerId: customerId || '', customerName: cust ? cust.name : 'Walk-in', status: paymentMethod === 'Credit' ? 'credit' : 'completed'
+      customerId: customerId || '', customerName: cust ? cust.name : 'Walk-in',
+      customerPhone: cust ? (cust.phone || '') : '',
+      customerAddress: cust ? (cust.address || '') : '',
+      status: paymentMethod === 'Credit' ? 'credit' : 'completed'
     };
     const res = await fbCreateSale(sale, user);
     setLoad('');
@@ -3211,10 +3216,23 @@ function DueAmountView({ user, role }) {
 
   const buildHistoryRows = () => {
     const rows = [];
-    const selectedSales = sales.filter(s => s.customerId && (!selectedCustomer || s.customerId === selectedCustomer) && inRange(s.createdAt));
+    // Show payments in chronological order: starting invoice payment first,
+    // then each due payment from oldest to newest.
+    const selectedSales = sales
+      .filter(s => s.customerId && (!selectedCustomer || s.customerId === selectedCustomer) && inRange(s.createdAt))
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
     selectedSales.forEach(s => {
-      const pays = duePayments.filter(p => p.saleId === s.id && inRange(p.paidAt));
-      const initialPaid = Math.max(0, Number(s.amountTendered || 0) - pays.reduce((a,p) => a + Number(p.amount || 0), 0));
+      const pays = duePayments
+        .filter(p => p.saleId === s.id && inRange(p.paidAt))
+        .sort((a, b) => new Date(a.paidAt) - new Date(b.paidAt));
+
+      const initialPaid = Math.max(
+        0,
+        Number(s.amountTendered || 0) - pays.reduce((a, p) => a + Number(p.amount || 0), 0)
+      );
+
+      // Sale Date is shown only on the starting invoice payment row.
       if (initialPaid > 0) {
         rows.push({
           customer: s.customerName || 'Walk-in',
@@ -3229,27 +3247,27 @@ function DueAmountView({ user, role }) {
           remaining: Math.max(0, Number(s.total || 0) - initialPaid)
         });
       }
-      if (pays.length) {
-        let runningTendered = initialPaid;
-        pays.forEach(p => {
-          const paymentAmount = Number(p.amount || 0);
-          runningTendered = round2(runningTendered + paymentAmount);
-          rows.push({
-            customer: s.customerName || 'Walk-in',
-            invoice: s.invoiceNo || String(s.id).slice(-6).toUpperCase(),
-            saleDate: formatDateForDisplay(s.createdAt),
-            paymentDate: formatDateForDisplay(p.paidAt),
-            total: Number(s.total || 0),
-            tendered: runningTendered,
-            paid: paymentAmount,
-            method: p.method || 'Cash',
-            paymentType: 'Due Payment',
-            remaining: Math.max(0, Number(s.total || 0) - runningTendered)
-          });
+
+      // All later payments have a blank Sale Date.
+      let runningTendered = initialPaid;
+      pays.forEach(p => {
+        const paymentAmount = Number(p.amount || 0);
+        runningTendered = round2(runningTendered + paymentAmount);
+        rows.push({
+          customer: s.customerName || 'Walk-in',
+          invoice: s.invoiceNo || String(s.id).slice(-6).toUpperCase(),
+          saleDate: '',
+          paymentDate: formatDateForDisplay(p.paidAt),
+          total: Number(s.total || 0),
+          tendered: runningTendered,
+          paid: paymentAmount,
+          method: p.method || 'Cash',
+          paymentType: 'Due Payment',
+          remaining: Math.max(0, Number(s.total || 0) - runningTendered)
         });
-      }
-;
+      });
     });
+
     return rows;
   };
 
@@ -3257,7 +3275,7 @@ function DueAmountView({ user, role }) {
     const rows = buildHistoryRows();
     const customerName = selectedCustomer ? (customerMap[selectedCustomer]?.name || 'Customer') : 'All Customers';
     const filterText = `${dateFrom || 'All'} to ${dateTo || 'All'}`;
-    const body = rows.length ? rows.map(r => `<tr><td>${esc(r.paymentDate)}</td><td>${esc(r.customer)}</td><td>${esc(r.invoice)}</td><td>${esc(r.saleDate)}</td><td>${esc(r.paymentType || "Payment")}</td><td>${esc(r.method)}</td><td style="text-align:right">${money(r.tendered)}</td><td style="text-align:right">${money(r.paid)}</td><td style="text-align:right">${money(r.remaining)}</td></tr>`).join('') : `<tr><td colspan="8" style="text-align:center">No payment history found.</td></tr>`;
+    const body = rows.length ? rows.map(r => `<tr><td>${esc(r.paymentDate)}</td><td>${esc(r.customer)}</td><td>${esc(r.invoice)}</td><td>${esc(r.saleDate)}</td><td>${esc(r.paymentType || "Payment")}</td><td>${esc(r.method)}</td><td style="text-align:right">${money(r.tendered)}</td><td style="text-align:right">${money(r.paid)}</td><td style="text-align:right">${money(r.remaining)}</td></tr>`).join('') : `<tr><td colspan="9" style="text-align:center">No payment history found.</td></tr>`;
     const w = window.open('', '', 'width=1100,height=800');
     w.document.write(`<html><head><title>Due Payment History</title><style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;color:#222;font-size:12px}h1{color:#001f3f;margin-bottom:4px}.meta{color:#666;margin-bottom:16px}table{width:100%;border-collapse:collapse}th{background:#001f3f;color:#fff;padding:8px;text-align:left}td{padding:7px;border-bottom:1px solid #ddd}tfoot td{font-weight:700;border-top:2px solid #001f3f}</style></head><body><h1>Due Payment History</h1><div class="meta">Customer: ${esc(customerName)} &nbsp; | &nbsp; Date: ${esc(filterText)}</div><table><thead><tr><th>Payment Date</th><th>Customer</th><th>Invoice</th><th>Sale Date</th><th>Payment Type</th><th>Payment Method</th><th>Amount Tendered</th><th>Payment Amount</th><th>Remaining Due</th></tr></thead><tbody>${body}</tbody><tfoot>
 <tr><td colspan="7">Total Payments</td><td>${money(rows.reduce((a,r)=>a+r.paid,0))}</td><td></td></tr>
