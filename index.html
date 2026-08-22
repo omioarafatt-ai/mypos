@@ -930,7 +930,7 @@ async function fbCreateReturn(saleId, items, user) {
     await Promise.all(items.map(function(it) {
       return fbAddStockMovement({ productId: it.productId, type: 'in', qty: it.qty, reason: 'Return', reference: saleId }, it.name, user);
     }));
-    const refundStr = '$' + Number(totalRefund || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const refundStr = 'Tk' + Number(totalRefund || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     await fbLogActivity('Return', user, 'Refund ' + refundStr + ' (' + items.length + ' item' + (items.length === 1 ? '' : 's') + ') for sale ' + saleId);
     return { success: true, message: 'Return processed', id: ref.key };
   } catch (e) { return { success: false, message: e.message }; }
