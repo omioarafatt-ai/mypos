@@ -594,7 +594,7 @@ async function seedDemoData() {
   const setSnap = await db.ref('settings').once('value');
   if (!setSnap.exists()) {
     await db.ref('settings').set({
-      businessName: 'My Business', currencySymbol: '$', currencyCode: 'USD', taxRate: 0, taxInclusive: false,
+      businessName: 'My Business', currencySymbol: 'Tk', currencyCode: 'BDT', taxRate: 0, taxInclusive: false,
       invoicePrefix: 'INV-', lowStockDefault: 5, receiptHeader: '', receiptFooter: 'Thank you for your purchase!',
       address: '', phone: '', email: '', logoUrl: ''
     });
