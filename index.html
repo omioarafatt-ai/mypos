@@ -2682,7 +2682,20 @@ function POSView({ user, role }) {
   const codeIndex = useMemo(() => buildCodeIndex(products), [products]);
   const { data: custData } = useFetch(() => fbGetCustomers(), []);
   const customers = useMemo(() => (custData && custData.success ? custData.data : []), [custData]);
-  const customerOpts = useMemo(() => customers.map(c => ({ value: c.id, label: c.name + (c.phone ? ' · ' + c.phone : '') })), [customers]);
+  const customerOpts = useMemo(() => customers.map(c => ({
+    value: c.id,
+    label: c.name + (c.customerType ? ` · ${c.customerType}` : '') + (c.phone ? ' · ' + c.phone : '')
+  })), [customers]);
+  const selectedCustomer = useMemo(() => customers.find(c => c.id === customerId) || null, [customers, customerId]);
+  const selectedCustomerType = selectedCustomer?.customerType || 'Retail';
+  const getSalePrice = useCallback((product) => {
+    // Retail uses Selling Price; Wholesale uses Wholesale Price. Cost is never used as sale price.
+    if (selectedCustomerType === 'Wholesale') {
+      const wholesale = Number(product.wholesalePrice);
+      return wholesale > 0 ? wholesale : (Number(product.price) || 0);
+    }
+    return Number(product.price) || 0;
+  }, [selectedCustomerType]);
   const { loading: loadingMovements, data: movementsData } = useFetch(() => fbGetStockMovements(), [reloadKey]);
   const movements = useMemo(() => (movementsData && movementsData.success ? movementsData.data : []), [movementsData]);
   // gate scanning until both loads land - scanning against a still-empty movements array
@@ -2701,14 +2714,15 @@ function POSView({ user, role }) {
   }, [movements]);
 
   const addToCart = useCallback((product, qtyToAdd) => {
+    const salePrice = getSalePrice(product);
     setCart(prev => {
       const existing = prev.find(l => l.productId === product.id);
       const nextQty = (existing ? existing.qty : 0) + qtyToAdd;
       if (!capacityCheck(product.id, product.name, nextQty)) return prev;
-      if (existing) return prev.map(l => l.productId === product.id ? { ...l, qty: nextQty } : l);
-      return [...prev, { productId: product.id, name: product.name, sku: product.sku, price: Number(product.price) || 0, qty: qtyToAdd }];
+      if (existing) return prev.map(l => l.productId === product.id ? { ...l, qty: nextQty, price: salePrice } : l);
+      return [...prev, { productId: product.id, name: product.name, sku: product.sku, price: salePrice, qty: qtyToAdd }];
     });
-  }, [capacityCheck]);
+  }, [capacityCheck, getSalePrice]);
 
   const resolveAndAddToCart = useCallback(async (rawCode) => {
     const code = String(rawCode || '').trim();
@@ -2762,6 +2776,15 @@ function POSView({ user, role }) {
 
   const totals = useMemo(() => computeSaleTotals(cart, prodById, { type: discountType, value: discountValue }), [cart, prodById, discountType, discountValue]);
   const itemCount = useMemo(() => cart.reduce((s, l) => s + l.qty, 0), [cart]);
+
+  // Switch all cart lines immediately when the customer price tier changes.
+  useEffect(() => {
+    if (!cart.length) return;
+    setCart(prev => prev.map(line => {
+      const product = prodById[line.productId];
+      return product ? { ...line, price: getSalePrice(product) } : line;
+    }));
+  }, [customerId, prodById, getSalePrice]);
   const changeDue = paymentMethod === 'Cash' ? Math.max(0, (Number(tendered) || 0) - totals.grand) : 0;
 
   const persistHeld = (list) => { setHeld(list); localStorage.setItem('pos_held', JSON.stringify(list)); };
@@ -2800,6 +2823,7 @@ function POSView({ user, role }) {
       items: totals.lines, subtotal: totals.subtotal, discount: totals.discount, discountType, tax: totals.tax, total: totals.grand,
       paymentMethod, amountTendered: paymentMethod === 'Cash' ? (Number(tendered) || 0) : (paymentMethod === 'Credit' ? 0 : totals.grand), changeDue: round2(changeDue),
       customerId: customerId || '', customerName: cust ? cust.name : 'Walk-in',
+      customerType: cust ? (cust.customerType || 'Retail') : 'Retail',
       customerPhone: cust ? (cust.phone || '') : '',
       customerAddress: cust ? (cust.address || '') : '',
       status: paymentMethod === 'Credit' ? 'credit' : 'completed'
@@ -2853,7 +2877,7 @@ function POSView({ user, role }) {
                       <tr>
                         <th>Product</th>
                         <th>SKU</th>
-                        <th>Price</th>
+                        <th>{selectedCustomerType === 'Wholesale' ? 'Wholesale Price' : 'Selling Price'}</th>
                         <th>Stock</th>
                         <th style={{width:'100px'}}>Qty</th>
                         <th style={{width:'85px'}}>Add</th>
@@ -2866,7 +2890,7 @@ function POSView({ user, role }) {
                           <tr key={product.id}>
                             <td><strong>{product.name}</strong>{product.category ? <div className="cell-sub">{product.category}</div> : null}</td>
                             <td><code>{product.sku || '-'}</code></td>
-                            <td>{money(Number(product.price) || 0)}</td>
+                            <td>{money(getSalePrice(product))}</td>
                             <td className={'pos-product-stock' + (stock <= Number(product.reorderLevel || 0) ? ' low' : '')}>{stock}</td>
                             <td>
                               <input
@@ -2901,6 +2925,9 @@ function POSView({ user, role }) {
         </div>
         <div className="pos-summary">
           <SearchableDropdown label="Customer" icon="fas fa-user" options={customerOpts} value={customerId} onChange={setCustomerId} placeholder="Walk-in customer" />
+          <div className="pos-summary-row" style={{fontSize:'12px', color:'#777', paddingTop:0}}>
+            <span>Customer Type</span><strong style={{color:'var(--navy-primary)'}}>{selectedCustomerType}</strong>
+          </div>
           <div className="pos-disc-row">
             <SearchableDropdown label="Discount" icon="fas fa-tags" options={DISCOUNT_TYPE_OPTS} value={discountType} onChange={setDiscountType} placeholder="Amount" />
             <div className="form-group"><label>Value</label><input type="number" min="0" step="0.01" placeholder="0" value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} /></div>
@@ -3486,16 +3513,6 @@ function DashboardView({ user, role, setActiveMenu }) {
   }, [sales, products, movements, expenses, today]);
 
   const recentSales = useMemo(() => [...sales].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 6), [sales]);
-  const dashboardDueCustomers = useMemo(() => {
-    const map = {};
-    sales.forEach(x => {
-      const due = Math.max(0, round2(Number(x.total || 0) - Number(x.amountTendered || 0)));
-      if (due <= 0 || !x.customerId) return;
-      if (!map[x.customerId]) map[x.customerId] = { id:x.customerId, name:x.customerName || 'Unknown Customer', due:0 };
-      map[x.customerId].due = round2(map[x.customerId].due + due);
-    });
-    return Object.values(map).sort((a,b)=>b.due-a.due);
-  }, [sales]);
 
 
   useEffect(() => {
@@ -3564,25 +3581,6 @@ function DashboardView({ user, role, setActiveMenu }) {
                 <thead><tr><th>Product</th><th>SKU</th><th>On Hand</th><th>Reorder</th></tr></thead>
                 <tbody>{s.lowStock.slice(0, 8).map(p => <tr key={p.id}><td>{p.name}</td><td><code>{p.sku}</code></td><td><span className="status-badge status-inactive">{computeQtyOnHand(p.id, movements)}</span></td><td>{p.reorderLevel || 0}</td></tr>)}</tbody>
               </table>
-            </div>
-          )}
-        </LteCard>
-      </div>
-      <div style={{marginTop:'20px'}}>
-        <LteCard title="Due Amount Summary" icon="fa-hand-holding-dollar">
-          <div className="table-summary">
-            <div className="table-summary-item"><div className="ts-label">Total Due</div><div className="ts-value" style={{color:'#ea4335'}}>{money(s.creditOutstanding)}</div></div>
-            <div className="table-summary-item"><div className="ts-label">Customers With Due</div><div className="ts-value">{dashboardDueCustomers.length}</div></div>
-          </div>
-          {dashboardDueCustomers.length === 0 ? <p style={{color:'#999',marginTop:'14px'}}>No customer due amount.</p> : (
-            <div style={{marginTop:'10px'}}>
-              {dashboardDueCustomers.slice(0,8).map(c => (
-                <div className="due-customer-row" key={c.id}>
-                  <div className="due-customer-main"><div className="due-customer-name">{esc(c.name)}</div></div>
-                  <div className="due-customer-amount">{money(c.due)}</div>
-                </div>
-              ))}
-              {dashboardDueCustomers.length > 8 && <div style={{textAlign:'center',marginTop:'12px'}}><button className="btn btn-primary btn-sm" onClick={() => setActiveMenu('due-amount')}>View All Due</button></div>}
             </div>
           )}
         </LteCard>
@@ -3962,9 +3960,17 @@ function FinancialReportView({ user, role, type }) {
     [filteredSales, saleProfit]
   );
 
-  const revenue = useMemo(
+  // Total Sell is the sum of the actual sale totals for the filtered sales.
+  const totalSell = useMemo(
     () => round2(filteredSales.reduce((sum, s) => sum + Number(s.total || 0), 0)),
     [filteredSales]
+  );
+
+  // Total Revenue is the sum of Profit values shown in the Sales List.
+  // Dashboard, Print Report and PDF Report all use this same total.
+  const revenue = useMemo(
+    () => totalSalesProfit,
+    [totalSalesProfit]
   );
   const expenseTotal = useMemo(
     () => round2(filteredExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0)),
@@ -3989,6 +3995,7 @@ function FinancialReportView({ user, role, type }) {
       s.invoiceNo || String(s.id).slice(-6).toUpperCase(),
       s.customerName || 'Walk-in',
       s.paymentMethod || '-',
+      money(s.total),
       money(saleProfit(s))
     ]);
     if (type === 'expenses') return filteredExpenses.map(e => [
@@ -4021,17 +4028,22 @@ function FinancialReportView({ user, role, type }) {
           </tbody>
         </table>
         <h2>Revenue Details</h2>
-        <table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Profit</th></tr></thead>
-        <tbody>${filteredSales.length ? filteredSales.map(s => `<tr><td>${esc(formatDateForDisplay(s.createdAt))}</td><td>${esc(s.invoiceNo || String(s.id).slice(-6).toUpperCase())}</td><td>${esc(s.customerName || 'Walk-in')}</td><td>${esc(s.paymentMethod || '-')}</td><td>${money(saleProfit(s))}</td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center">No sales found.</td></tr>'}<tr class="report-total-row"><td colspan="4"><strong>Total</strong></td><td><strong>${money(revenue)}</strong></td></tr></tbody></table>
+        <table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Sell</th><th>Profit</th></tr></thead>
+        <tbody>${filteredSales.length ? filteredSales.map(s => `<tr><td>${esc(formatDateForDisplay(s.createdAt))}</td><td>${esc(s.invoiceNo || String(s.id).slice(-6).toUpperCase())}</td><td>${esc(s.customerName || 'Walk-in')}</td><td>${esc(s.paymentMethod || '-')}</td><td>${money(s.total)}</td><td>${money(saleProfit(s))}</td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center">No sales found.</td></tr>'}<tr class="report-total-row"><td colspan="4"><strong>Total</strong></td><td><strong>${money(totalSell)}</strong></td><td><strong>${money(totalSalesProfit)}</strong></td></tr></tbody></table>
         <h2>Expense Details</h2>
         <table><thead><tr><th>Date</th><th>Category</th><th>Payee</th><th>Paid Via</th><th>Amount</th></tr></thead>
         <tbody>${filteredExpenses.length ? filteredExpenses.map(e => `<tr><td>${esc(e.date || (e.createdAt || '').slice(0, 10))}</td><td>${esc(e.category || '-')}</td><td>${esc(e.payee || '-')}</td><td>${esc(e.paymentMethod || '-')}</td><td>${money(e.amount)}</td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center">No expenses found.</td></tr>'}<tr class="report-total-row"><td colspan="4"><strong>Total</strong></td><td><strong>${money(expenseTotal)}</strong></td></tr></tbody></table>`;
     } else {
       const headers = type === 'revenue'
-        ? '<th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Profit</th>'
+        ? '<th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Sell</th><th>Profit</th>'
         : '<th>Date</th><th>Category</th><th>Payee</th><th>Paid Via</th><th>Amount</th>';
-      body = `<table><thead><tr>${headers}</tr></thead><tbody>${rowsHtml}</tbody></table>
-        <div class="total">Total ${type === 'revenue' ? 'Revenue' : 'Expenses'}: <strong>${money(type === 'revenue' ? revenue : expenseTotal)}</strong></div>`;
+      if (type === 'revenue') {
+        const revenueTotalRow = `<tr class="report-total-row"><td colspan="4">Total</td><td>${money(totalSell)}</td><td>${money(totalSalesProfit)}</td></tr>`;
+        body = `<table><thead><tr>${headers}</tr></thead><tbody>${rowsHtml}${revenueTotalRow}</tbody></table>`;
+      } else {
+        const expenseTotalRow = `<tr class="report-total-row"><td colspan="4">Total</td><td>${money(expenseTotal)}</td></tr>`;
+        body = `<table><thead><tr>${headers}</tr></thead><tbody>${rowsHtml}${expenseTotalRow}</tbody></table>`;
+      }
     }
 
     const w = window.open('', '', 'width=1100,height=800');
@@ -4069,11 +4081,11 @@ function FinancialReportView({ user, role, type }) {
       );
       content.push(
         { text: 'Revenue Details', style: 'section' },
-        { table: { headerRows: 1, widths: ['auto','auto','*','auto','auto'],
+        { table: { headerRows: 1, widths: ['auto','auto','*','auto','auto','auto'],
           body: [
-            ['Date','Invoice','Customer','Payment','Profit'],
-            ...filteredSales.map(s => [formatDateForDisplay(s.createdAt), s.invoiceNo || String(s.id).slice(-6).toUpperCase(), s.customerName || 'Walk-in', s.paymentMethod || '-', money(saleProfit(s))]),
-            [{text:'Total',bold:true,colSpan:4}, {}, {}, {}, {text:money(revenue),bold:true}]
+            ['Date','Invoice','Customer','Payment','Sell','Profit'],
+            ...filteredSales.map(s => [formatDateForDisplay(s.createdAt), s.invoiceNo || String(s.id).slice(-6).toUpperCase(), s.customerName || 'Walk-in', s.paymentMethod || '-', money(s.total), money(saleProfit(s))]),
+            [{text:'Total',bold:true,colSpan:4}, {}, {}, {}, {text:money(totalSell),bold:true}, {text:money(totalSalesProfit),bold:true}]
           ],
           layout: 'grid'
         }},
@@ -4088,9 +4100,14 @@ function FinancialReportView({ user, role, type }) {
         }}
       );
     } else if (type === 'revenue') {
-      content.push({ table: { headerRows: 1, widths: ['auto','auto','*','auto','auto'],
-        body: [['Date','Invoice','Customer','Payment','Profit'], ...reportRows] }});
-      content.push({ text: `Total Revenue: ${money(revenue)}`, style: 'total' });
+      content.push({ table: { headerRows: 1, widths: ['auto','auto','*','auto','auto','auto'],
+        body: [
+          ['Date','Invoice','Customer','Payment','Sell','Profit'],
+          ...reportRows,
+          [{text:'Total',bold:true,colSpan:4}, {}, {}, {}, {text:money(totalSell),bold:true}, {text:money(totalSalesProfit),bold:true}]
+        ],
+        layout: 'grid'
+      }});
     } else {
       content.push({ table: { headerRows: 1, widths: ['auto','*','*','auto','auto'],
         body: [['Date','Category','Payee','Paid Via','Amount'], ...reportRows] }});
@@ -4186,12 +4203,11 @@ function FinancialReportView({ user, role, type }) {
         <div className="lte-card">
           <div className="lte-card-header">
             <h3 className="lte-card-title"><i className="fas fa-receipt"></i> Sales List</h3>
-            <strong>{money(type === 'net' ? totalSalesProfit : revenue)}</strong>
           </div>
           <div className="lte-card-body">
             <div className="about-table-wrapper">
               <table className="about-roles-table">
-                <thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Profit</th></tr></thead>
+                <thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Sell</th><th>Profit</th></tr></thead>
                 <tbody>
                   {filteredSales.length ? filteredSales.map(s => (
                     <tr key={s.id}>
@@ -4199,14 +4215,16 @@ function FinancialReportView({ user, role, type }) {
                       <td>{s.invoiceNo || String(s.id).slice(-6).toUpperCase()}</td>
                       <td>{s.customerName || 'Walk-in'}</td>
                       <td>{s.paymentMethod || '-'}</td>
+                      <td>{money(s.total)}</td>
                       <td>{money(saleProfit(s))}</td>
                     </tr>
-                  )) : <tr><td colSpan="5">No sales found for the selected date range.</td></tr>}
+                  )) : <tr><td colSpan="6">No sales found for the selected date range.</td></tr>}
                 </tbody>
               </table>
             </div>
             <div className="table-summary">
               <div className="table-summary-item"><div className="ts-label">Sales Count</div><div className="ts-value">{filteredSales.length}</div></div>
+              <div className="table-summary-item"><div className="ts-label">Total Sell</div><div className="ts-value">{money(totalSell)}</div></div>
               <div className="table-summary-item"><div className="ts-label">Total Profit</div><div className="ts-value">{money(totalSalesProfit)}</div></div>
             </div>
           </div>
@@ -4217,7 +4235,6 @@ function FinancialReportView({ user, role, type }) {
         <div className="lte-card">
           <div className="lte-card-header">
             <h3 className="lte-card-title"><i className="fas fa-money-bill-trend-up"></i> Expenses List</h3>
-            <strong>{money(expenseTotal)}</strong>
           </div>
           <div className="lte-card-body">
             <div className="about-table-wrapper">
