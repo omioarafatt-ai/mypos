@@ -3949,6 +3949,19 @@ function FinancialReportView({ user, role, type }) {
     [expenses, inRange]
   );
 
+  // Gross profit per sale: (Subtotal - Discount) - line cost × quantity.
+  // The cost is snapshotted on each sale line at checkout.
+  const saleProfit = useCallback((s) => {
+    const cogs = (s.items || []).reduce((sum, it) => sum + (Number(it.cost) || 0) * (Number(it.qty) || 0), 0);
+    const salesBase = Number(s.subtotal != null ? s.subtotal : s.total || 0) - Number(s.discount || 0);
+    return round2(salesBase - cogs);
+  }, []);
+
+  const totalSalesProfit = useMemo(
+    () => round2(filteredSales.reduce((sum, s) => sum + saleProfit(s), 0)),
+    [filteredSales, saleProfit]
+  );
+
   const revenue = useMemo(
     () => round2(filteredSales.reduce((sum, s) => sum + Number(s.total || 0), 0)),
     [filteredSales]
@@ -3976,7 +3989,7 @@ function FinancialReportView({ user, role, type }) {
       s.invoiceNo || String(s.id).slice(-6).toUpperCase(),
       s.customerName || 'Walk-in',
       s.paymentMethod || '-',
-      money(s.total)
+      money(saleProfit(s))
     ]);
     if (type === 'expenses') return filteredExpenses.map(e => [
       e.date || (e.createdAt || '').slice(0, 10),
@@ -4008,14 +4021,14 @@ function FinancialReportView({ user, role, type }) {
           </tbody>
         </table>
         <h2>Revenue Details</h2>
-        <table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Total</th></tr></thead>
-        <tbody>${filteredSales.length ? filteredSales.map(s => `<tr><td>${esc(formatDateForDisplay(s.createdAt))}</td><td>${esc(s.invoiceNo || String(s.id).slice(-6).toUpperCase())}</td><td>${esc(s.customerName || 'Walk-in')}</td><td>${esc(s.paymentMethod || '-')}</td><td>${money(s.total)}</td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center">No sales found.</td></tr>'}</tbody></table>
+        <table><thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Profit</th></tr></thead>
+        <tbody>${filteredSales.length ? filteredSales.map(s => `<tr><td>${esc(formatDateForDisplay(s.createdAt))}</td><td>${esc(s.invoiceNo || String(s.id).slice(-6).toUpperCase())}</td><td>${esc(s.customerName || 'Walk-in')}</td><td>${esc(s.paymentMethod || '-')}</td><td>${money(saleProfit(s))}</td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center">No sales found.</td></tr>'}<tr class="report-total-row"><td colspan="4"><strong>Total</strong></td><td><strong>${money(revenue)}</strong></td></tr></tbody></table>
         <h2>Expense Details</h2>
         <table><thead><tr><th>Date</th><th>Category</th><th>Payee</th><th>Paid Via</th><th>Amount</th></tr></thead>
-        <tbody>${filteredExpenses.length ? filteredExpenses.map(e => `<tr><td>${esc(e.date || (e.createdAt || '').slice(0, 10))}</td><td>${esc(e.category || '-')}</td><td>${esc(e.payee || '-')}</td><td>${esc(e.paymentMethod || '-')}</td><td>${money(e.amount)}</td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center">No expenses found.</td></tr>'}</tbody></table>`;
+        <tbody>${filteredExpenses.length ? filteredExpenses.map(e => `<tr><td>${esc(e.date || (e.createdAt || '').slice(0, 10))}</td><td>${esc(e.category || '-')}</td><td>${esc(e.payee || '-')}</td><td>${esc(e.paymentMethod || '-')}</td><td>${money(e.amount)}</td></tr>`).join('') : '<tr><td colspan="5" style="text-align:center">No expenses found.</td></tr>'}<tr class="report-total-row"><td colspan="4"><strong>Total</strong></td><td><strong>${money(expenseTotal)}</strong></td></tr></tbody></table>`;
     } else {
       const headers = type === 'revenue'
-        ? '<th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Total</th>'
+        ? '<th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Profit</th>'
         : '<th>Date</th><th>Category</th><th>Payee</th><th>Paid Via</th><th>Amount</th>';
       body = `<table><thead><tr>${headers}</tr></thead><tbody>${rowsHtml}</tbody></table>
         <div class="total">Total ${type === 'revenue' ? 'Revenue' : 'Expenses'}: <strong>${money(type === 'revenue' ? revenue : expenseTotal)}</strong></div>`;
@@ -4026,7 +4039,8 @@ function FinancialReportView({ user, role, type }) {
       @page{size:A4 portrait;margin:12mm}body{font-family:Arial,sans-serif;color:#222;font-size:11px}
       h1{color:#001f3f;margin:0 0 5px}h2{color:#001f3f;margin:20px 0 7px;font-size:14px}
       .meta{color:#666;margin-bottom:15px}table{width:100%;border-collapse:collapse;margin-bottom:12px}
-      th{background:#001f3f;color:#fff;padding:7px;text-align:left}td{padding:6px;border-bottom:1px solid #ddd}
+      th{background:#001f3f;color:#fff;padding:7px;text-align:left;border:1px solid #222}td{padding:6px;border:1px solid #222}
+      .report-total-row td{font-weight:700}
       .total{font-size:14px;text-align:right;margin-top:8px}
     </style></head><body><h1>${esc(reportTitle)}</h1><div class="meta">Date: ${esc(dateLabel)}</div>${body}</body></html>`);
     w.document.close();
@@ -4057,21 +4071,25 @@ function FinancialReportView({ user, role, type }) {
         { text: 'Revenue Details', style: 'section' },
         { table: { headerRows: 1, widths: ['auto','auto','*','auto','auto'],
           body: [
-            ['Date','Invoice','Customer','Payment','Total'],
-            ...filteredSales.map(s => [formatDateForDisplay(s.createdAt), s.invoiceNo || String(s.id).slice(-6).toUpperCase(), s.customerName || 'Walk-in', s.paymentMethod || '-', money(s.total)])
-          ]
+            ['Date','Invoice','Customer','Payment','Profit'],
+            ...filteredSales.map(s => [formatDateForDisplay(s.createdAt), s.invoiceNo || String(s.id).slice(-6).toUpperCase(), s.customerName || 'Walk-in', s.paymentMethod || '-', money(saleProfit(s))]),
+            [{text:'Total',bold:true,colSpan:4}, {}, {}, {}, {text:money(revenue),bold:true}]
+          ],
+          layout: 'grid'
         }},
         { text: 'Expense Details', style: 'section' },
         { table: { headerRows: 1, widths: ['auto','*','*','auto','auto'],
           body: [
             ['Date','Category','Payee','Paid Via','Amount'],
-            ...filteredExpenses.map(e => [e.date || (e.createdAt || '').slice(0,10), e.category || '-', e.payee || '-', e.paymentMethod || '-', money(e.amount)])
-          ]
+            ...filteredExpenses.map(e => [e.date || (e.createdAt || '').slice(0,10), e.category || '-', e.payee || '-', e.paymentMethod || '-', money(e.amount)]),
+            [{text:'Total',bold:true,colSpan:4}, {}, {}, {}, {text:money(expenseTotal),bold:true}]
+          ],
+          layout: 'grid'
         }}
       );
     } else if (type === 'revenue') {
       content.push({ table: { headerRows: 1, widths: ['auto','auto','*','auto','auto'],
-        body: [['Date','Invoice','Customer','Payment','Total'], ...reportRows] }});
+        body: [['Date','Invoice','Customer','Payment','Profit'], ...reportRows] }});
       content.push({ text: `Total Revenue: ${money(revenue)}`, style: 'total' });
     } else {
       content.push({ table: { headerRows: 1, widths: ['auto','*','*','auto','auto'],
@@ -4168,12 +4186,12 @@ function FinancialReportView({ user, role, type }) {
         <div className="lte-card">
           <div className="lte-card-header">
             <h3 className="lte-card-title"><i className="fas fa-receipt"></i> Sales List</h3>
-            <strong>{money(revenue)}</strong>
+            <strong>{money(type === 'net' ? totalSalesProfit : revenue)}</strong>
           </div>
           <div className="lte-card-body">
             <div className="about-table-wrapper">
               <table className="about-roles-table">
-                <thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Total</th></tr></thead>
+                <thead><tr><th>Date</th><th>Invoice</th><th>Customer</th><th>Payment</th><th>Profit</th></tr></thead>
                 <tbody>
                   {filteredSales.length ? filteredSales.map(s => (
                     <tr key={s.id}>
@@ -4181,7 +4199,7 @@ function FinancialReportView({ user, role, type }) {
                       <td>{s.invoiceNo || String(s.id).slice(-6).toUpperCase()}</td>
                       <td>{s.customerName || 'Walk-in'}</td>
                       <td>{s.paymentMethod || '-'}</td>
-                      <td>{money(s.total)}</td>
+                      <td>{money(saleProfit(s))}</td>
                     </tr>
                   )) : <tr><td colSpan="5">No sales found for the selected date range.</td></tr>}
                 </tbody>
@@ -4189,7 +4207,7 @@ function FinancialReportView({ user, role, type }) {
             </div>
             <div className="table-summary">
               <div className="table-summary-item"><div className="ts-label">Sales Count</div><div className="ts-value">{filteredSales.length}</div></div>
-              <div className="table-summary-item"><div className="ts-label">Total Revenue</div><div className="ts-value">{money(revenue)}</div></div>
+              <div className="table-summary-item"><div className="ts-label">Total Profit</div><div className="ts-value">{money(totalSalesProfit)}</div></div>
             </div>
           </div>
         </div>
@@ -4232,7 +4250,7 @@ function FinancialReportView({ user, role, type }) {
             <div className="table-summary">
               <div className="table-summary-item"><div className="ts-label">Revenue</div><div className="ts-value">{money(revenue)}</div></div>
               <div className="table-summary-item"><div className="ts-label">Expenses</div><div className="ts-value">{money(expenseTotal)}</div></div>
-              <div className="table-summary-item"><div className="ts-label">Net</div><div className="ts-value">{money(net)}</div></div>
+              <div className="table-summary-item"><div className="ts-label">Total</div><div className="ts-value">{money(net)}</div></div>
             </div>
           </div>
         </div>
